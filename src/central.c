@@ -74,6 +74,7 @@ void verifica_instancia_unica() {
     
     if (fd < 0) {
         if (errno == EEXIST) {
+                perror("oi");
             fprintf(stderr, "ERRO: Ja existe uma instancia da Central em execucao!\n");
             exit(EXIT_FAILURE);
         } else {
