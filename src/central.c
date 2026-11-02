@@ -74,7 +74,6 @@ void verifica_instancia_unica() {
     
     if (fd < 0) {
         if (errno == EEXIST) {
-                perror("oi");
             fprintf(stderr, "ERRO: Ja existe uma instancia da Central em execucao!\n");
             exit(EXIT_FAILURE);
         } else {
@@ -110,6 +109,31 @@ int main(int argc, char* argv[]) {
 
     // Verifica se já há outra Central a correr (Adicionado aqui!)
     verifica_instancia_unica();
+
+    // ==========================================
+    // TASK 2: INICIALIZAÇÃO DE PIPES ANÓNIMOS
+    // ==========================================
+    
+    int pipe_c2t[2]; // Pipe Central -> Tarifador
+    int pipe_t2c[2]; // Pipe Tarifador -> Central
+
+    // Criação do primeiro pipe
+    if (pipe(pipe_c2t) == -1) {
+        perror("ERRO: Falha ao criar pipe Central->Tarifador");
+        unlink(LOCK_FILE); // Limpa o lock antes de abortar
+        exit(EXIT_FAILURE);
+    }
+
+    // Criação do segundo pipe
+    if (pipe(pipe_t2c) == -1) {
+        perror("ERRO: Falha ao criar pipe Tarifador->Central");
+        unlink(LOCK_FILE);
+        exit(EXIT_FAILURE);
+    }
+    
+    printf("DEBUG: Pipes criados com sucesso.\n"); // Podes remover isto mais tarde
+
+    // ==========================================
 
     // Apenas para debug: testar se leu bem
     printf("--- CONFIGURACOES DA CENTRAL ---\n");
