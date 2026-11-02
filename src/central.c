@@ -135,6 +135,54 @@ int main(int argc, char* argv[]) {
 
     // ==========================================
 
+
+    // ==========================================
+    // TASK 3: CRIAÇÃO DO PROCESSO-FILHO (TARIFADOR)
+    // ==========================================
+    
+    pid_t pid_tarifador = fork();
+
+    if (pid_tarifador < 0) {
+        perror("ERRO: Falha ao executar o fork");
+        unlink(LOCK_FILE);
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid_tarifador == 0) {
+        // --- CÓDIGO DO PROCESSO-FILHO (TARIFADOR) ---
+        
+        // 1. Fechar as pontas dos tubos que o filho não vai usar
+        close(pipe_c2t[1]); // O filho não escreve no tubo de ida
+        close(pipe_t2c[0]); // O filho não lê do tubo de volta
+
+        // 2. Redirecionar stdin (0) e stdout (1) para os tubos
+        dup2(pipe_c2t[0], STDIN_FILENO);   // O stdin passa a ler do pipe_c2t
+        dup2(pipe_t2c[1], STDOUT_FILENO);  // O stdout passa a escrever no pipe_t2c
+
+        // 3. Fechar os descritores originais que já foram duplicados
+        close(pipe_c2t[0]);
+        close(pipe_t2c[1]);
+
+        // 4. Construir o caminho para o executável e lançar com exec()
+        char caminho_tarifador[512];
+        snprintf(caminho_tarifador, sizeof(caminho_tarifador), "%s/tarifador", estado_central.bin_dir);
+        
+        execl(caminho_tarifador, "tarifador", NULL);
+        
+        // Se o código chegar aqui, significa que o execl() falhou
+        perror("ERRO: Falha ao iniciar o executavel do tarifador (verifique a BINDIR)");
+        exit(EXIT_FAILURE);
+    }
+
+    // --- CÓDIGO DO PROCESSO-PAI (CENTRAL) ---
+    // Fechar as pontas que a Central não vai usar
+    close(pipe_c2t[0]); // A Central não lê do tubo que envia
+    close(pipe_t2c[1]); // A Central não escreve no tubo que recebe
+
+    printf("DEBUG: Tarifador arrancou com PID %d.\n", pid_tarifador);
+    // ==========================================
+
+
     // Apenas para debug: testar se leu bem
     printf("--- CONFIGURACOES DA CENTRAL ---\n");
     printf("Max Estafetas: %d\n", estado_central.max_estafetas);
