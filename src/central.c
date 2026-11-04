@@ -191,6 +191,52 @@ int main(int argc, char* argv[]) {
     printf("Pipe Central: %s\n", estado_central.central_pipe);
     printf("--------------------------------\n");
 
+
+// ==========================================
+    // TASK 4: CONSOLA DE ADMINISTRAÇÃO
+    // ==========================================
+    char linha[256];
+    char *comando;
+    
+    printf("\n--- Consola de Administracao Pronta ---\n");
+    
+    while (1) {
+        printf("Central > ");
+        fflush(stdout); // Força o prompt a aparecer imediatamente
+        
+        // Lê a linha do terminal
+        if (fgets(linha, sizeof(linha), stdin) == NULL) {
+            break; // Sai em caso de erro ou EOF (Ctrl+D)
+        }
+        
+        // Remove o parágrafo '\n' que o fgets apanha no final
+        linha[strcspn(linha, "\n")] = 0;
+        
+        // Extrai a primeira palavra (o comando real)
+        comando = strtok(linha, " ");
+        
+        if (comando == NULL) {
+            continue; // Se o utilizador só der Enter, volta ao início do ciclo
+        }
+        
+        // Verifica qual foi o comando introduzido
+        if (strcmp(comando, "encerra") == 0) {
+            printf("A encerrar a Central...\n");
+            break; // Quebra o ciclo while(1) e segue para o fim do main()
+        } 
+        else if (strcmp(comando, "stats") == 0) {
+            printf("DEBUG: Comando 'stats' reconhecido (a implementar na Task 6)\n");
+        }
+        else if (strcmp(comando, "pedido") == 0) {
+            printf("DEBUG: Comando 'pedido' reconhecido (a implementar na Task 5)\n");
+        }
+        else {
+            printf("ERRO: Comando desconhecido '%s'\n", comando);
+        }
+    }
+    // ==========================================
+
+
     // Remove o ficheiro de lock antes de sair, para não trancar execuções futuras.
     // (Mais à frente, isto vai passar para a função de encerramento real)
     unlink(LOCK_FILE);
