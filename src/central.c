@@ -6,12 +6,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <errno.h> // Necessário para detetar o erro EEXIST
+#include "central.h"
 
-// Valores por omissão (conforme a secção 7.2 do enunciado)
-#define DEF_MAXESTAFETAS 10
-#define DEF_PRAZOACEITA 30
-#define MAX_PEDIDOS_ESPERA 30
-#define LOCK_FILE "/tmp/central_so2627.lock"
 
 // Estrutura para guardar as estatísticas (comando 'stats')
 typedef struct {
