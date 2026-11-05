@@ -66,3 +66,4 @@ vcpkg_installed/
 Testing/
 .cache/
 /.vs
+.vscode/
