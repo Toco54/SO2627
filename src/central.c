@@ -10,23 +10,23 @@
 
 
 // Estrutura para guardar as estatísticas (comando 'stats')
-typedef struct {
-    int recebidos;
-    int atribuidos;
-    int concluidos;
-    int expirados;
-    int perdidos;
-    float valor_total;
-} Estatisticas;
+// typedef struct {
+//     int recebidos;
+//     int atribuidos;
+//     int concluidos;
+//     int expirados;
+//     int perdidos;
+//     float valor_total;
+// } Estatisticas;
 
-// Estrutura principal com o estado e configuração da Central
-typedef struct {
-    int max_estafetas;
-    int prazo_aceita;
-    char bin_dir[256];
-    char central_pipe[256];
-    Estatisticas stats;
-} CentralState;
+// // Estrutura principal com o estado e configuração da Central
+// typedef struct {
+//     int max_estafetas;
+//     int prazo_aceita;
+//     char bin_dir[256];
+//     char central_pipe[256];
+//     Estatisticas stats;
+// } CentralState;
 
 // Variável global para ser mais fácil aceder ao estado a partir de funções auxiliares ou sinais
 CentralState estado_central;
@@ -224,7 +224,45 @@ int main(int argc, char* argv[]) {
             printf("DEBUG: Comando 'stats' reconhecido (a implementar na Task 6)\n");
         }
         else if (strcmp(comando, "pedido") == 0) {
-            printf("DEBUG: Comando 'pedido' reconhecido (a implementar na Task 5)\n");
+            // Extrair os argumentos seguintes usando strtok
+            char *origem = strtok(NULL, " ");
+            char *destino = strtok(NULL, " ");
+            char *peso_str = strtok(NULL, " ");
+
+            // Validar se o utilizador escreveu os 3 argumentos
+            if (origem == NULL || destino == NULL || peso_str == NULL) {
+                printf("ERRO: Formato incorreto. Uso: pedido <origem> <destino> <peso>\n");
+            } else {
+                // Apenas para confirmar que a extração funcionou bem
+                //printf("DEBUG: A enviar para o tarifador -> Origem: %s, Destino: %s, Peso: %s\n", origem, destino, peso_str);
+                
+
+                char mensagem_tarifador[256];
+                snprintf(mensagem_tarifador, sizeof(mensagem_tarifador), "%s %s %s\n", origem, destino, peso_str);
+
+                // 2. Enviar para o pipe do tarifador (Central -> Tarifador)
+                if (write(pipe_c2t[1], mensagem_tarifador, strlen(mensagem_tarifador)) == -1) {
+                    perror("ERRO ao escrever para o tarifador");
+                } else {
+                    // 3. Ler a resposta do tarifador (Tarifador -> Central)
+                    char resposta_tarifador[256];
+                    ssize_t bytes_lidos = read(pipe_t2c[0], resposta_tarifador, sizeof(resposta_tarifador) - 1);
+
+                    if (bytes_lidos > 0) {
+                        resposta_tarifador[bytes_lidos] = '\0'; // Garantir que a string termina corretamente
+                        
+                        // Remover o \n do fim da resposta se existir, para ficar bonito no print
+                        resposta_tarifador[strcspn(resposta_tarifador, "\n")] = 0;
+
+                        printf("PEDIDO ACETUELE/TARIFADO -> Resposta do Tarifador: %s\n", resposta_tarifador);
+                    } else {
+                        printf("ERRO ao ler a resposta do tarifador\n");
+                    }
+                }
+
+
+                
+            }
         }
         else {
             printf("ERRO: Comando desconhecido '%s'\n", comando);
