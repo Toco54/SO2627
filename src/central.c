@@ -6,8 +6,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <errno.h> // Necessário para detetar o erro EEXIST
+#include <signal.h>
 #include "central.h"
-
 
 // Estrutura para guardar as estatísticas (comando 'stats')
 // typedef struct {
@@ -30,7 +30,9 @@
 
 // Variável global para ser mais fácil aceder ao estado a partir de funções auxiliares ou sinais
 CentralState estado_central;
-
+pid_t pid_tarifador = -1;
+int pipe_c2t[2];
+int pipe_t2c[2];
 
 
 void inicializa_estado() {
@@ -82,10 +84,36 @@ void verifica_instancia_unica() {
     close(fd); 
 }
 
+void encerra_central() {
+    printf("\nA encerrar a Central ordeiramente...\n");
+
+    // 1. Fechar o nosso lado dos tubos (isto envia um EOF ao tarifador, fazendo-o sair do while)
+    close(pipe_c2t[1]);
+    close(pipe_t2c[0]);
+
+    // 2. Esperar que o processo do tarifador termine (evita que fique um processo zombie)
+    if (pid_tarifador > 0) {
+        printf("A aguardar terminacao do tarifador (PID %d)...\n", pid_tarifador);
+        waitpid(pid_tarifador, NULL, 0);
+    }
+
+    // 3. Apagar o ficheiro de lock para libertar a instância única
+    unlink(LOCK_FILE);
+    
+    printf("Recursos libertados com sucesso. Obrigado!\n");
+    exit(EXIT_SUCCESS);
+}
+
+// Função que é chamada automaticamente se o utilizador fizer Ctrl+C
+void trata_sigint(int signum) {
+    encerra_central();
+}
+
 
 int main(int argc, char* argv[]) {
     // Carrega o que está nas variáveis de ambiente primeiro
     inicializa_estado();
+    signal(SIGINT, trata_sigint);
 
     // Lê os argumentos passados na linha de comandos (que têm prioridade)
     int opt;
@@ -110,8 +138,8 @@ int main(int argc, char* argv[]) {
     // TASK 2: INICIALIZAÇÃO DE PIPES ANÓNIMOS
     // ==========================================
     
-    int pipe_c2t[2]; // Pipe Central -> Tarifador
-    int pipe_t2c[2]; // Pipe Tarifador -> Central
+    // int pipe_c2t[2]; // Pipe Central -> Tarifador
+    // int pipe_t2c[2]; // Pipe Tarifador -> Central
 
     // Criação do primeiro pipe
     if (pipe(pipe_c2t) == -1) {
@@ -136,7 +164,7 @@ int main(int argc, char* argv[]) {
     // TASK 3: CRIAÇÃO DO PROCESSO-FILHO (TARIFADOR)
     // ==========================================
     
-    pid_t pid_tarifador = fork();
+    pid_tarifador = fork();
 
     if (pid_tarifador < 0) {
         perror("ERRO: Falha ao executar o fork");
@@ -217,11 +245,17 @@ int main(int argc, char* argv[]) {
         
         // Verifica qual foi o comando introduzido
         if (strcmp(comando, "encerra") == 0) {
-            printf("A encerrar a Central...\n");
-            break; // Quebra o ciclo while(1) e segue para o fim do main()
+            encerra_central();
         } 
         else if (strcmp(comando, "stats") == 0) {
-            printf("DEBUG: Comando 'stats' reconhecido (a implementar na Task 6)\n");
+            printf("\n--- ESTATISTICAS DA CENTRAL ---\n");
+            printf("Pedidos recebidos:  %d\n", estado_central.stats.recebidos);
+            printf("Pedidos atribuidos: %d\n", estado_central.stats.atribuidos);
+            printf("Pedidos concluidos: %d\n", estado_central.stats.concluidos);
+            printf("Pedidos expirados:  %d\n", estado_central.stats.expirados);
+            printf("Pedidos perdidos:   %d\n", estado_central.stats.perdidos);
+            printf("Valor total:        %.2f euros\n", estado_central.stats.valor_total);
+            printf("-------------------------------\n");
         }
         else if (strcmp(comando, "pedido") == 0) {
             // Extrair os argumentos seguintes usando strtok
@@ -254,7 +288,8 @@ int main(int argc, char* argv[]) {
                         // Remover o \n do fim da resposta se existir, para ficar bonito no print
                         resposta_tarifador[strcspn(resposta_tarifador, "\n")] = 0;
 
-                        printf("PEDIDO ACETUELE/TARIFADO -> Resposta do Tarifador: %s\n", resposta_tarifador);
+                        printf("PEDIDO ACEiTE/TARIFADO -> Resposta do Tarifador: %s\n", resposta_tarifador);
+                        estado_central.stats.recebidos++;
                     } else {
                         printf("ERRO ao ler a resposta do tarifador\n");
                     }
@@ -270,10 +305,6 @@ int main(int argc, char* argv[]) {
     }
     // ==========================================
 
-
-    // Remove o ficheiro de lock antes de sair, para não trancar execuções futuras.
-    // (Mais à frente, isto vai passar para a função de encerramento real)
-    unlink(LOCK_FILE);
 
     return 0;
 }
