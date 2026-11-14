@@ -66,3 +66,9 @@ vcpkg_installed/
 Testing/
 .cache/
 /.vs
+
+# Executaveis Linux do projeto
+central
+estafeta
+gerador
+tarifador

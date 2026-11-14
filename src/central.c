@@ -106,6 +106,7 @@ void encerra_central() {
 
 // Função que é chamada automaticamente se o utilizador fizer Ctrl+C
 void trata_sigint(int signum) {
+    (void)signum;
     encerra_central();
 }
 

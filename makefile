@@ -1,16 +1,10 @@
-# Makefile base para o projeto
-# Nota importante: usa sempre a tecla TAB antes dos comandos (ex: antes do gcc e do rm), nunca espaços!
+CC = gcc
+CFLAGS = -Wall -Wextra
 
-all: central estafeta gerador
+all: central
 
-central: src/central.c
-	gcc -Wall src/central.c -o central
-
-estafeta: src/estafeta.c
-	gcc -Wall src/estafeta.c -o estafeta
-
-gerador: src/gerador.c
-	gcc -Wall src/gerador.c -o gerador
+central: src/central.c src/central.h
+	$(CC) $(CFLAGS) src/central.c -o central
 
 clean:
-	rm -f central estafeta gerador
+	rm -f central
