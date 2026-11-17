@@ -9,35 +9,16 @@
 #include <signal.h>
 #include "central.h"
 
-// Estrutura para guardar as estatísticas (comando 'stats')
-// typedef struct {
-//     int recebidos;
-//     int atribuidos;
-//     int concluidos;
-//     int expirados;
-//     int perdidos;
-//     float valor_total;
-// } Estatisticas;
-
-// // Estrutura principal com o estado e configuração da Central
-// typedef struct {
-//     int max_estafetas;
-//     int prazo_aceita;
-//     char bin_dir[256];
-//     char central_pipe[256];
-//     Estatisticas stats;
-// } CentralState;
-
 // Variável global para ser mais fácil aceder ao estado a partir de funções auxiliares ou sinais
-CentralState estado_central;
-pid_t pid_tarifador = -1;
-int pipe_c2t[2];
-int pipe_t2c[2];
+// CentralState estado_central;
+static pid_t pid_tarifador = -1;
+static int pipe_c2t[2] = {-1, -1};
+static int pipe_t2c[2] = {-1, -1};
 
 
-void inicializa_estado() {
+void inicializa_estado(CentralState *estado) {
     // 1. Inicializar estatísticas a zero
-    memset(&estado_central.stats, 0, sizeof(Estatisticas));
+    memset(&estado->stats, 0, sizeof(Estatisticas));
 
     // 2. Tentar ler variáveis de ambiente
     char* env_max = getenv("MAXESTAFETAS");
@@ -46,18 +27,20 @@ void inicializa_estado() {
     char* env_pipe = getenv("CENTRAL_PIPE");
 
     // 3. Atribuir valores lidos ou os valores por omissão
-    estado_central.max_estafetas = (env_max) ? atoi(env_max) : DEF_MAXESTAFETAS;
-    estado_central.prazo_aceita = (env_prazo) ? atoi(env_prazo) : DEF_PRAZOACEITA;
+    estado->max_estafetas = (env_max) ? atoi(env_max) : DEF_MAXESTAFETAS;
+    estado->prazo_aceita = (env_prazo) ? atoi(env_prazo) : DEF_PRAZOACEITA;
 
     if (env_bindir) {
-        strncpy(estado_central.bin_dir, env_bindir, sizeof(estado_central.bin_dir) - 1);
+        strncpy(estado->bin_dir, env_bindir, sizeof(estado->bin_dir) - 1);
+        estado->bin_dir[sizeof(estado->bin_dir) - 1] = '\0';
     }
     else {
-        strcpy(estado_central.bin_dir, "."); // Diretoria atual por omissão
+        strcpy(estado->bin_dir, "."); // Diretoria atual por omissão
     }
 
     if (env_pipe) {
-        strncpy(estado_central.central_pipe, env_pipe, sizeof(estado_central.central_pipe) - 1);
+        strncpy(estado->central_pipe, env_pipe, sizeof(estado->central_pipe) - 1);
+        estado->central_pipe[sizeof(estado->central_pipe) - 1] = '\0';
     }
     else {
         fprintf(stderr, "ERRO: Variavel de ambiente CENTRAL_PIPE e obrigatoria!\n");
@@ -87,7 +70,6 @@ void verifica_instancia_unica() {
 void encerra_central() {
     printf("\nA encerrar a Central ordeiramente...\n");
 
-    // 1. Fechar o nosso lado dos tubos (isto envia um EOF ao tarifador, fazendo-o sair do while)
     close(pipe_c2t[1]);
     close(pipe_t2c[0]);
 
@@ -113,7 +95,8 @@ void trata_sigint(int signum) {
 
 int main(int argc, char* argv[]) {
     // Carrega o que está nas variáveis de ambiente primeiro
-    inicializa_estado();
+    CentralState estado_central;
+    inicializa_estado(&estado_central);
     signal(SIGINT, trata_sigint);
 
     // Lê os argumentos passados na linha de comandos (que têm prioridade)
@@ -132,6 +115,15 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    if (estado_central.max_estafetas <= 0 || estado_central.max_estafetas > 20) {
+        fprintf(stderr, "ERRO: MAXESTAFETAS deve estar entre 1 e 20.\n");
+        exit(EXIT_FAILURE);
+    }
+    if (estado_central.prazo_aceita <= 0) {
+        fprintf(stderr, "ERRO: PRAZOACEITA deve ser superior a 0.\n");
+        exit(EXIT_FAILURE);
+    }
+    
     // Verifica se já há outra Central a correr (Adicionado aqui!)
     verifica_instancia_unica();
 
@@ -225,13 +217,13 @@ int main(int argc, char* argv[]) {
     
     printf("\n--- Consola de Administracao Pronta ---\n");
     
-    while (1) {
+while (1) {
         printf("Central > ");
         fflush(stdout); // Força o prompt a aparecer imediatamente
         
         // Lê a linha do terminal
         if (fgets(linha, sizeof(linha), stdin) == NULL) {
-            break; // Sai em caso de erro ou EOF (Ctrl+D)
+            encerra_central(); // Sai em caso de erro ou EOF (Ctrl+D)
         }
         
         // Remove o parágrafo '\n' que o fgets apanha no final
@@ -246,66 +238,73 @@ int main(int argc, char* argv[]) {
         
         // Verifica qual foi o comando introduzido
         if (strcmp(comando, "encerra") == 0) {
-            encerra_central();
+            if (strtok(NULL, " ") != NULL) {
+                printf("ERRO: O comando 'encerra' nao aceita parametros.\n");
+            } else {
+                encerra_central();
+            }
         } 
         else if (strcmp(comando, "stats") == 0) {
-            printf("\n--- ESTATISTICAS DA CENTRAL ---\n");
-            printf("Pedidos recebidos:  %d\n", estado_central.stats.recebidos);
-            printf("Pedidos atribuidos: %d\n", estado_central.stats.atribuidos);
-            printf("Pedidos concluidos: %d\n", estado_central.stats.concluidos);
-            printf("Pedidos expirados:  %d\n", estado_central.stats.expirados);
-            printf("Pedidos perdidos:   %d\n", estado_central.stats.perdidos);
-            printf("Valor total:        %.2f euros\n", estado_central.stats.valor_total);
-            printf("-------------------------------\n");
+            if (strtok(NULL, " ") != NULL) {
+                printf("ERRO: O comando 'stats' nao aceita parametros.\n");
+            } else {
+                printf("\n--- ESTATISTICAS DA CENTRAL ---\n");
+                printf("Pedidos recebidos:  %d\n", estado_central.stats.recebidos);
+                printf("Pedidos atribuidos: %d\n", estado_central.stats.atribuidos);
+                printf("Pedidos concluidos: %d\n", estado_central.stats.concluidos);
+                printf("Pedidos expirados:  %d\n", estado_central.stats.expirados);
+                printf("Pedidos perdidos:   %d\n", estado_central.stats.perdidos);
+                printf("Valor total:        %.2f euros\n", estado_central.stats.valor_total);
+                printf("-------------------------------\n");
+            }
         }
         else if (strcmp(comando, "pedido") == 0) {
             // Extrair os argumentos seguintes usando strtok
             char *origem = strtok(NULL, " ");
             char *destino = strtok(NULL, " ");
             char *peso_str = strtok(NULL, " ");
+            char *extra = strtok(NULL, " ");
 
-            // Validar se o utilizador escreveu os 3 argumentos
-            if (origem == NULL || destino == NULL || peso_str == NULL) {
+            // Validar se o utilizador escreveu exatamente os 3 argumentos
+            if (origem == NULL || destino == NULL || peso_str == NULL || extra != NULL) {
                 printf("ERRO: Formato incorreto. Uso: pedido <origem> <destino> <peso>\n");
             } else {
-                // Apenas para confirmar que a extração funcionou bem
-                //printf("DEBUG: A enviar para o tarifador -> Origem: %s, Destino: %s, Peso: %s\n", origem, destino, peso_str);
-                
+                char *endptr;
+                float peso = strtof(peso_str, &endptr);
 
-                char mensagem_tarifador[256];
-                snprintf(mensagem_tarifador, sizeof(mensagem_tarifador), "%s %s %s\n", origem, destino, peso_str);
-
-                // 2. Enviar para o pipe do tarifador (Central -> Tarifador)
-                if (write(pipe_c2t[1], mensagem_tarifador, strlen(mensagem_tarifador)) == -1) {
-                    perror("ERRO ao escrever para o tarifador");
+                if (*endptr != '\0' || peso <= 0.0f) {
+                    printf("ERRO: Peso invalido. Deve ser um valor numerico positivo.\n");
+                } else if (strlen(origem) > 15 || strlen(destino) > 15) {
+                    printf("ERRO: Origem e destino nao podem exceder 15 caracteres.\n");
                 } else {
-                    // 3. Ler a resposta do tarifador (Tarifador -> Central)
-                    char resposta_tarifador[256];
-                    ssize_t bytes_lidos = read(pipe_t2c[0], resposta_tarifador, sizeof(resposta_tarifador) - 1);
+                    char mensagem_tarifador[256];
+                    snprintf(mensagem_tarifador, sizeof(mensagem_tarifador), "%s %s %s\n", origem, destino, peso_str);
 
-                    if (bytes_lidos > 0) {
-                        resposta_tarifador[bytes_lidos] = '\0'; // Garantir que a string termina corretamente
-                        
-                        // Remover o \n do fim da resposta se existir, para ficar bonito no print
-                        resposta_tarifador[strcspn(resposta_tarifador, "\n")] = 0;
-
-                        printf("PEDIDO ACEiTE/TARIFADO -> Resposta do Tarifador: %s\n", resposta_tarifador);
-                        estado_central.stats.recebidos++;
+                    // Enviar para o pipe do tarifador (Central -> Tarifador)
+                    if (write(pipe_c2t[1], mensagem_tarifador, strlen(mensagem_tarifador)) == -1) {
+                        perror("ERRO ao escrever para o tarifador");
                     } else {
-                        printf("ERRO ao ler a resposta do tarifador\n");
+                        // Ler a resposta do tarifador (Tarifador -> Central)
+                        char resposta_tarifador[256];
+                        ssize_t bytes_lidos = read(pipe_t2c[0], resposta_tarifador, sizeof(resposta_tarifador) - 1);
+
+                        if (bytes_lidos > 0) {
+                            resposta_tarifador[bytes_lidos] = '\0';
+                            resposta_tarifador[strcspn(resposta_tarifador, "\n")] = 0;
+
+                            printf("PEDIDO ACEITE/TARIFADO -> Resposta do Tarifador: %s\n", resposta_tarifador);
+                            estado_central.stats.recebidos++;
+                        } else {
+                            printf("ERRO ao ler a resposta do tarifador\n");
+                        }
                     }
                 }
-
-
-                
             }
         }
         else {
             printf("ERRO: Comando desconhecido '%s'\n", comando);
         }
     }
-    // ==========================================
-
 
     return 0;
 }
