@@ -67,3 +67,8 @@ Testing/
 .cache/
 /.vs
 .vscode/
+# Executaveis Linux do projeto
+central
+estafeta
+gerador
+tarifador
